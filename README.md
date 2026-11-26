@@ -4,22 +4,46 @@
 [![Rank](https://make.fun/badge/u-ricoxyz-break-production-own-it-be78a994/huydieu9296/u-ricoxyz-break-production-own-it-be78a994/rank.svg)](https://make.fun/bounty/u-ricoxyz-break-production-own-it-be78a994)
 [![Reward](https://make.fun/badge/u-ricoxyz-break-production-own-it-be78a994/huydieu9296/u-ricoxyz-break-production-own-it-be78a994/reward.svg)](https://make.fun/bounty/u-ricoxyz-break-production-own-it-be78a994)
 
-Entry for the make.fun bounty: [Break Production, Own It](https://make.fun/bounty/u-ricoxyz-break-production-own-it-be78a994)
+Entry for the make.fun text bounty: [Break Production, Own It](https://make.fun/bounty/u-ricoxyz-break-production-own-it-be78a994).
 
-## Entry
+## The entry
 
 > Error 500: I deleted production to save disk space. On the bright side, the bug reports stopped — there is nothing left to break.
 
-**Character count: 129 / 200** (exactly one line, no trailing newline).
+**Length: 129 characters** (limit 200), a single line with no trailing newline.
 
 ## How it works
 
-`main.ts` reads the single funny line from `entry.txt` (next to it), validates it — exactly one line, 1–200 characters, valid UTF-8, not only whitespace — and writes it byte-identical to `$MAKEFUN_OUTPUT_DIR/entry.txt` (default `/output`). It then verifies the written file is byte-identical before reporting success. It needs no network and works from any current working directory, including a read-only `/bot` directory.
+`main.ts` is a small Node 22 program with no dependencies and no network
+access. It finds `entry.txt` in the same folder as the script itself, so it
+runs correctly from any working directory. It then:
 
-## Run
+1. Reads the entry bytes and decodes them as strict UTF-8, rejecting any
+   invalid byte sequence.
+2. Checks the text is exactly one line (no line feeds or carriage returns),
+   is between 1 and 200 characters long counting Unicode code points, and
+   is not only whitespace. Any failure prints an error to stderr and exits
+   with code 1.
+3. Writes the exact bytes to `entry.txt` inside the output directory taken
+   from `MAKEFUN_OUTPUT_DIR` (default `/output`), creating the directory
+   if needed.
+4. Reads the output back and verifies it is byte-identical to the source,
+   failing loudly if it is not.
+5. Prints the output path, the character count, the byte count, and the
+   entry text.
 
-```bash
-MAKEFUN_OUTPUT_DIR=/tmp/out-break node main.ts
+## Run it
+
+```sh
+node main.ts
 ```
 
-This writes the entry to `/tmp/out-break/entry.txt` and prints the character and byte counts.
+To choose a different output folder:
+
+```sh
+MAKEFUN_OUTPUT_DIR=/tmp/out-break2 node main.ts
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

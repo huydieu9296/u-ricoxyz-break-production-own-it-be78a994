@@ -1,77 +1,84 @@
-// Break Production, Own It — entry program.
+// Break Production, Own It — entry runner.
 //
-// The entry itself is a brutally honest postmortem from the agent that caused
-// the outage: "Error 500: I deleted production to save disk space. On the
-// bright side, the bug reports stopped — there is nothing left to break."
-// One line, 129 of the 200 allowed characters, stored verbatim in entry.txt.
-//
-// This program reads that single funny line from entry.txt next to this file
-// and writes it byte-identical to $MAKEFUN_OUTPUT_DIR/entry.txt (default
-// /output). Runs with no network, any CWD, in a read-only /bot directory.
+// The entry is a one-line sysadmin joke: someone deleted production to
+// free up disk space, and the silver lining is that with nothing left
+// standing, no new bug reports can possibly arrive. The punchline only
+// lands if the line stays exactly as written, so this program treats
+// the text as precious cargo: it reads entry.txt from the folder next
+// to this script, checks that it is a single valid line of at most
+// 200 characters, then copies those exact bytes into the output folder
+// for the judge and proves the copy matches byte for byte.
 
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const MAX_CHARS = 200;
+const DEFAULT_OUT = "/output";
 
-function fail(message: string): never {
+function die(message: string): never {
   console.error(`error: ${message}`);
   process.exit(1);
 }
 
-// Absolute path to entry.txt, resolved from this file's own location so the
-// program works no matter what the current working directory is.
-const here = dirname(fileURLToPath(import.meta.url));
-const sourcePath = join(here, "entry.txt");
-
-const outputDir = process.env.MAKEFUN_OUTPUT_DIR || "/output";
-const outputPath = join(outputDir, "entry.txt");
-
-let raw: Buffer;
-try {
-  raw = readFileSync(sourcePath);
-} catch (err) {
-  fail(`cannot read ${sourcePath}: ${(err as Error).message}`);
+function scriptDir(): string {
+  return dirname(fileURLToPath(import.meta.url));
 }
 
-// Reject invalid UTF-8 instead of silently replacing bad bytes: the gate
-// scores the file as UTF-8 text, so a replacement character would change it.
-let text: string;
-try {
-  text = new TextDecoder("utf-8", { fatal: true }).decode(raw);
-} catch {
-  fail("entry.txt is not valid UTF-8");
+function readSource(): Buffer {
+  const path = join(scriptDir(), "entry.txt");
+  try {
+    return readFileSync(path);
+  } catch {
+    die(`could not read the entry file at ${path}`);
+  }
 }
 
-// Gate: exactly one line, 1-200 characters, not only whitespace, no CR/LF
-// anywhere (including a trailing newline).
-// Count code points (not UTF-16 units) so the 200-char gate matches the
-// scorer's character count even for non-BMP characters.
-const charCount = [...text].length;
-if (text.includes("\r") || text.includes("\n")) {
-  fail("entry must be exactly one line with no newline characters");
-}
-if (charCount < 1 || charCount > MAX_CHARS) {
-  fail(`entry must be 1-${MAX_CHARS} characters, got ${charCount}`);
-}
-if (text.trim().length === 0) {
-  fail("entry must not be only whitespace");
+function decode(bytes: Buffer): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    die("entry.txt is not valid strict UTF-8");
+  }
 }
 
-try {
-  mkdirSync(outputDir, { recursive: true });
-  writeFileSync(outputPath, raw);
-} catch (err) {
-  fail(`cannot write ${outputPath}: ${(err as Error).message}`);
+// Every check below is a hard failure: any problem is reported on
+// stderr and the process stops with exit code 1. Length is counted in
+// Unicode code points (spreading the string), not UTF-16 code units,
+// so characters outside the basic plane count as one each.
+function validate(text: string): number {
+  if (text.includes("\n") || text.includes("\r")) {
+    die("entry must be exactly one line: no line feeds or carriage returns, not even a trailing newline");
+  }
+  const count = [...text].length;
+  if (count < 1 || count > MAX_CHARS) {
+    die(`entry must be between 1 and ${MAX_CHARS} characters, got ${count}`);
+  }
+  if (text.trim().length === 0) {
+    die("entry must contain visible text, not only spaces or other whitespace");
+  }
+  return count;
 }
 
-// Verify the written file is byte-identical before reporting success.
-const written = readFileSync(outputPath);
-if (!written.equals(raw)) {
-  fail("verification failed: output differs from entry.txt");
+function main(): void {
+  const bytes = readSource();
+  const text = decode(bytes);
+  const chars = validate(text);
+
+  const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? DEFAULT_OUT;
+  mkdirSync(outDir, { recursive: true });
+  const outPath = join(outDir, "entry.txt");
+  writeFileSync(outPath, bytes);
+
+  const written = readFileSync(outPath);
+  if (!written.equals(bytes)) {
+    die(`output at ${outPath} is not byte-identical to the source entry`);
+  }
+
+  console.log(`output: ${outPath}`);
+  console.log(`characters: ${chars}`);
+  console.log(`bytes: ${bytes.length}`);
+  console.log(text);
 }
 
-const bytes = raw.length;
-console.log(`wrote ${outputPath}: ${charCount} characters, ${bytes} bytes`);
-console.log(`entry: ${text}`);
+main();
