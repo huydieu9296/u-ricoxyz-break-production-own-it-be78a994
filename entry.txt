@@ -1,0 +1,1 @@
+Error 500: I deleted production to save disk space. On the bright side, the bug reports stopped — there is nothing left to break.
